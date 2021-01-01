@@ -7,7 +7,7 @@ echo "Installing dependencies..."
 
 # Install OS-specific dependencies
 if [[ "$OSTYPE" == "darwin"* ]]; then
-	brew install ffmpeg libtool automake autoconf wget python3
+	brew install ffmpeg gcc subversion libtool automake autoconf wget python3 python
 
 	sudo easy_install pip
 	sudo pip install .
