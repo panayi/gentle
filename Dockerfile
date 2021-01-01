@@ -3,6 +3,7 @@ FROM ubuntu:18.04
 RUN DEBIAN_FRONTEND=noninteractive && \
 	apt-get update && \
 	apt-get install -y \
+	  libatlas-base-dev \
 		gcc g++ gfortran \
 		libc++-dev \
 		libstdc++-6-dev zlib1g-dev \
@@ -12,7 +13,7 @@ RUN DEBIAN_FRONTEND=noninteractive && \
 		nvidia-cuda-dev \
 		ffmpeg \
 		python3 python3-dev python3-pip \
-		python python-dev python-pip \
+		python2.7 python python-dev python-pip \
 		wget unzip && \
 	apt-get clean
 
