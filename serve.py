@@ -172,7 +172,7 @@ class TranscriptionsController(Resource):
                 '''Write JSON to client on completion'''
                 req.setHeader("Content-Type", "application/json")
                 req.setHeader("Access-Control-Allow-Origin", "*")
-                req.setHeader("Access-Control-Allow-Credentials", True)
+                req.setHeader("Access-Control-Allow-Credentials", "True")
                 req.setHeader("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS")
                 req.write(result.to_json(indent=2).encode())
                 req.finish()
