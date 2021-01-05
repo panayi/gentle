@@ -4,6 +4,7 @@ from twisted.web.server import Site, NOT_DONE_YET
 from twisted.internet import reactor, threads
 from twisted.web._responses import FOUND
 
+import requests
 import json
 import logging
 import multiprocessing
@@ -24,7 +25,25 @@ class TranscriptionStatus(Resource):
 
     def render_GET(self, req):
         req.setHeader(b"Content-Type", "application/json")
+        req.setHeader(b"Access-Control-Allow-Origin", "*")
+        req.setHeader(b"Access-Control-Allow-Credentials", "True")
+        req.setHeader(b"Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS")
         return json.dumps(self.status_dict).encode()
+
+class TranscriptionResult(Resource):
+    def __init__(self, out_dir):
+        self.out_dir = out_dir
+        Resource.__init__(self)
+
+    def render_GET(self, req):
+        req.setHeader(b"Content-Type", "application/json")
+        req.setHeader(b"Access-Control-Allow-Origin", "*")
+        req.setHeader(b"Access-Control-Allow-Credentials", "True")
+        req.setHeader(b"Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS")
+
+        result = open(os.path.join(self.out_dir, 'align.json')).read()
+
+        return result.encode()
 
 class Transcriber():
     def __init__(self, data_dir, nthreads=4, ntranscriptionthreads=2):
@@ -135,13 +154,20 @@ class TranscriptionsController(Resource):
         trans_status = TranscriptionStatus(self.transcriber.get_status(uid))
         trans_ctrl.putChild(b"status.json", trans_status)
 
+        trans_result = TranscriptionResult(out_dir)
+        trans_ctrl.putChild(b"result.json", trans_result)
+
         return trans_ctrl
 
     def render_POST(self, req):
         uid = self.transcriber.next_id()
 
-        tran = req.args.get(b'transcript', [b''])[0].decode()
-        audio = req.args[b'audio'][0]
+        content = json.loads(req.content.read().decode("utf-8"))
+        tran = content["transcript"]
+        audioUrl = content["audioUrl"]
+
+        audioResult = requests.get(audioUrl, allow_redirects=True)
+        audio = audioResult.content
 
         disfluency = True if b'disfluency' in req.args else False
         conservative = True if b'conservative' in req.args else False
@@ -183,9 +209,20 @@ class TranscriptionsController(Resource):
 
             return NOT_DONE_YET
 
-        req.setResponseCode(FOUND)
-        req.setHeader(b"Location", "/transcriptions/%s" % (uid))
-        return b''
+        req.setHeader("Content-Type", "application/json")
+        req.setHeader("Access-Control-Allow-Origin", "*")
+        req.setHeader("Access-Control-Allow-Credentials", "True")
+        req.setHeader("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS")
+        
+        result = { "uid": uid }
+        req.write(json.dumps(result).encode('utf-8'))
+        req.finish()
+
+        return NOT_DONE_YET
+
+        # req.setResponseCode(FOUND)
+        # req.setHeader(b"Location", "/transcriptions/%s" % (uid))
+        # return b''
 
 class LazyZipper(Insist):
     def __init__(self, cachedir, transcriber, uid):
