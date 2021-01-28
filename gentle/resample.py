@@ -31,6 +31,7 @@ def resample_ffmpeg(infile, outfile, offset=None, duration=None):
     ] + offset + [
         '-i', infile,
     ] + duration + [
+        '-write_xing', '0',
         '-ac', '1', '-ar', '8000',
         '-acodec', 'pcm_s16le',
         outfile

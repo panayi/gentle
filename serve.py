@@ -12,6 +12,7 @@ import os
 import shutil
 import uuid
 import wave
+import ffmpeg
 
 from gentle.util.paths import get_resource, get_datadir
 from gentle.util.cyst import Insist
@@ -68,7 +69,7 @@ class Transcriber():
             uid = uuid.uuid4().hex[:8]
         return uid
 
-    def transcribe(self, uid, transcript, audio, async_mode, **kwargs):
+    def transcribe(self, uid, transcript, audio, async_mode, trim, **kwargs):
 
         status = self.get_status(uid)
 
@@ -82,14 +83,25 @@ class Transcriber():
         tran_path = os.path.join(outdir, 'transcript.txt')
         with open(tran_path, 'w') as tranfile:
             tranfile.write(transcript)
-        audio_path = os.path.join(outdir, 'upload')
-        with open(audio_path, 'wb') as wavfile:
-            wavfile.write(audio)
+        
+        audio_path = os.path.join(outdir, 'audio.mp3')
+
+        if trim:
+            input_audio_path = os.path.join(outdir, 'full.mp3')
+            with open(input_audio_path, 'wb') as wavfile:
+                wavfile.write(audio)
+            start = float(trim["startTime"])
+            end = float(trim["endTime"])
+            ffmpeg.input(input_audio_path).filter('atrim', start=start, end=end).output(audio_path).run()
+            os.unlink(os.path.join(outdir, 'full.mp3'))
+        else:
+            with open(audio_path, 'wb') as wavfile:
+                wavfile.write(audio)
 
         status['status'] = 'ENCODING'
 
         wavfile = os.path.join(outdir, 'a.wav')
-        if gentle.resample(os.path.join(outdir, 'upload'), wavfile) != 0:
+        if gentle.resample(os.path.join(outdir, 'audio.mp3'), wavfile) != 0:
             status['status'] = 'ERROR'
             status['error'] = "Encoding failed. Make sure that you've uploaded a valid media file."
             # Save the status so that errors are recovered on restart of the server
@@ -121,7 +133,7 @@ class Transcriber():
         output = trans.transcribe(wavfile, progress_cb=on_progress, logging=logging)
 
         # ...remove the original upload
-        os.unlink(os.path.join(outdir, 'upload'))
+        os.unlink(os.path.join(outdir, 'audio.mp3'))
 
         # Save
         with open(os.path.join(outdir, 'align.json'), 'w') as jsfile:
@@ -165,6 +177,7 @@ class TranscriptionsController(Resource):
         content = json.loads(req.content.read().decode("utf-8"))
         tran = content["transcript"]
         audioUrl = content["audioUrl"]
+        trim = content["trim"]
 
         audioResult = requests.get(audioUrl, allow_redirects=True)
         audio = audioResult.content
@@ -191,7 +204,7 @@ class TranscriptionsController(Resource):
         result_promise = threads.deferToThreadPool(
             reactor, reactor.getThreadPool(),
             self.transcriber.transcribe,
-            uid, tran, audio, async_mode, **kwargs)
+            uid, tran, audio, async_mode, trim, **kwargs)
 
         if not async_mode:
             def write_result(result):
